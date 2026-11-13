@@ -1,0 +1,13 @@
+# nerv-task's event contract (docs: README.md "Relation to nerv"). An
+# orchestrator that emits NERV-style pipeline events (such as nerv itself)
+# hands each one of these to the task:dispatcher agent, which dispatches
+# it to every installed task provider subscribed to it.
+agent: task:dispatcher
+events:
+  - run.started
+  - verification.started
+  - audit.ranked
+  - issue.deferred
+  - wave.started
+  - run.closed
+  - run.halted
