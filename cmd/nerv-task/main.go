@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+
+	"github.com/war-apps/nerv-kit-by-gentle-ai/selfupgrade"
 )
 
 const usage = `nerv-task - task tracking plugin for Claude Code
@@ -20,6 +22,12 @@ Run "nerv-task <command> -h" for a command's own flags.
 `
 
 func main() {
+	// Best-effort: clean up a stale "<exe>.old" an earlier Windows
+	// upgrade may have left behind (selfupgrade.Replace renames aside
+	// rather than over, on Windows). No-op on every other run.
+	if exe, err := os.Executable(); err == nil {
+		selfupgrade.CleanupStaleReplacement(exe)
+	}
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
 }
 
