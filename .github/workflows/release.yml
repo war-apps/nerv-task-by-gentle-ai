@@ -1,0 +1,119 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  stable:
+    name: Stable release (main)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+
+      - name: go test
+        shell: bash
+        run: go test -count=1 ./...
+
+      - name: install-sh.test.sh
+        shell: bash
+        run: bash tests/install-sh.test.sh
+
+      - name: Run release guard
+        id: guard
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          version=$(jq -r '.version' plugin/task/.claude-plugin/plugin.json)
+          teamwork_version=$(jq -r '.version' plugin/extensions/task-teamwork/.claude-plugin/plugin.json)
+          if [ "$version" != "$teamwork_version" ]; then
+            echo "plugin.json versions disagree: task=$version task-teamwork=$teamwork_version"
+            exit 1
+          fi
+          tag="v$version"
+
+          if git rev-parse "$tag" >/dev/null 2>&1; then
+            echo "$tag is already tagged: nothing to release."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          heading="## [$version]"
+          if ! grep -qF "$heading" CHANGELOG.md; then
+            echo "CHANGELOG.md has no '$heading' section; cut the release notes before merging to main."
+            exit 1
+          fi
+
+          notes_path="$RUNNER_TEMP/notes.md"
+          awk -v heading="$heading" '
+            $0 == heading { found=1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md > "$notes_path"
+          if [ ! -s "$notes_path" ]; then
+            echo "$heading has no notes under it in CHANGELOG.md"
+            exit 1
+          fi
+
+          {
+            echo "skip=false"
+            echo "version=$version"
+            echo "tag=$tag"
+            echo "notes_path=$notes_path"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Configure git identity
+        if: steps.guard.outputs.skip != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Create and push release tag
+        if: steps.guard.outputs.skip != 'true'
+        shell: bash
+        env:
+          TAG: ${{ steps.guard.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git tag -a "$TAG" -m "Release $TAG"
+          git push origin "$TAG"
+
+      - name: Create GitHub Release
+        if: steps.guard.outputs.skip != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.guard.outputs.tag }}
+          NOTES_PATH: ${{ steps.guard.outputs.notes_path }}
+        run: |
+          set -euo pipefail
+          gh release create "$TAG" --title "$TAG" --notes-file "$NOTES_PATH"
+
+      - name: Publish binaries with goreleaser
+        if: steps.guard.outputs.skip != 'true'
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          version: v2.15.2
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ github.token }}

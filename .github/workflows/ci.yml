@@ -1,0 +1,106 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    name: Go checks (${{ matrix.os }})
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+
+      - name: gofmt
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "The following files are not gofmt-formatted:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: go vet
+        shell: bash
+        run: go vet ./...
+
+      - name: go build
+        shell: bash
+        run: go build ./...
+
+      - name: go test
+        shell: bash
+        run: go test -count=1 ./...
+
+  install-without-nerv:
+    name: Install on a runner with no nerv
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+
+      - name: Build nerv-task
+        shell: bash
+        run: go build -o "$RUNNER_TEMP/bin/nerv-task" ./cmd/nerv-task
+
+      - name: Install with a fake HOME and a stub claude
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          fakehome="$RUNNER_TEMP/fakehome"
+          stubdir="$RUNNER_TEMP/stub"
+          mkdir -p "$fakehome" "$stubdir"
+
+          cat >"$stubdir/claude" <<'EOF'
+          #!/usr/bin/env sh
+          echo "stub claude: $*"
+          exit 0
+          EOF
+          chmod +x "$stubdir/claude"
+
+          HOME="$fakehome" PATH="$stubdir:$RUNNER_TEMP/bin:$PATH" "$RUNNER_TEMP/bin/nerv-task" install --no-configure
+
+          settings="$fakehome/.claude/settings.json"
+          if [ ! -f "$settings" ]; then
+            echo "settings.json was not written at $settings"
+            exit 1
+          fi
+          cat "$settings"
+
+          python3 - "$settings" <<'PYEOF'
+          import json, sys
+          with open(sys.argv[1]) as f:
+              data = json.load(f)
+          enabled = data.get("enabledPlugins", {})
+          marketplaces = data.get("extraKnownMarketplaces", {})
+          assert enabled.get("task@nerv-task") is True, f"task@nerv-task not enabled: {enabled}"
+          assert "nerv-task" in marketplaces, f"nerv-task marketplace not registered: {marketplaces}"
+          print("settings.json registers nerv-task and enables task@nerv-task")
+          PYEOF
