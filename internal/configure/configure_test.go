@@ -157,37 +157,6 @@ func TestSet_MalformedAssignment_Refused(t *testing.T) {
 	}
 }
 
-func TestReadNervGit_MissingFile_ReturnsFalseNoError(t *testing.T) {
-	got, found, err := configure.ReadNervGit(t.TempDir())
-	if err != nil {
-		t.Fatalf("ReadNervGit() error = %v", err)
-	}
-	if found {
-		t.Errorf("ReadNervGit() found = true, want false; got %+v", got)
-	}
-}
-
-func TestReadNervGit_ReadsGitBlockWhenPresent(t *testing.T) {
-	root := t.TempDir()
-	dir := filepath.Join(root, ".ai-workflow")
-	if err := writeFile(filepath.Join(dir, "config.yaml"), "git:\n  base_branch: trunk\n  worktree: false\n"); err != nil {
-		t.Fatal(err)
-	}
-	got, found, err := configure.ReadNervGit(root)
-	if err != nil {
-		t.Fatalf("ReadNervGit() error = %v", err)
-	}
-	if !found {
-		t.Fatal("ReadNervGit() found = false, want true")
-	}
-	if got.BaseBranch != "trunk" {
-		t.Errorf("BaseBranch = %q, want trunk", got.BaseBranch)
-	}
-	if got.Worktree {
-		t.Error("Worktree = true, want false (explicit override)")
-	}
-}
-
 func writeFile(path, content string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err

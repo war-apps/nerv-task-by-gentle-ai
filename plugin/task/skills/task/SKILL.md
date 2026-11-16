@@ -52,11 +52,13 @@ included.
 | `providers.<name>.enabled` | `true` | `false` keeps the provider installed but stops sending it events. |
 
 Git settings for the worktree offer (§9) — `branch_pattern`,
-`commit_ref_pattern`, `worktree`, `worktree_pattern`, `base_branch` — have
-built-in defaults equal to nerv's own documented ones. When this repository
-also has nerv installed and committed its own `.ai-workflow/config.yaml`
-with a `git:` block, read it and prefer its values. This is opportunistic:
-nerv-task works standalone, with no nerv installed at all.
+`commit_ref_pattern`, `worktree` (`ask`, `always` or `never`),
+`worktree_pattern`, `base_branch` — have built-in defaults equal to
+nerv's own documented ones. When nerv is also set up, its own
+configuration overrides them key by key, opportunistically: first its
+global user file, then this repository's own `.ai-workflow/config.yaml`
+`git:` block, which wins. This is never a dependency: nerv-task works
+standalone, with no nerv installed at all.
 
 ## 2. Finding providers
 
@@ -364,10 +366,12 @@ The offer runs only inside a git repository.
    exists (`git branch --list "*{prefix}-{id}*"`, `git worktree list`,
    the resolved `git.worktree_pattern` path), offer to enter it or to
    work in place.
-3. **New worktree.** Otherwise ask one grouped question: the base branch
-   (default `git.base_branch`), whether to create a worktree, and the
-   branch name.
-4. **On yes:**
+3. **New worktree.** Otherwise follow `git.worktree` (`ask`, `always` or
+   `never`): `never` skips the offer entirely (work in place); `always`
+   creates the worktree without asking; `ask` (the default) asks one
+   grouped question: the base branch (default `git.base_branch`),
+   whether to create a worktree, and the branch name.
+4. **On yes** (or on `always`):
    - fast-forward the base branch first. When it has diverged or the
      remote is unreachable, ask before going on;
    - resolve the path from `git.worktree_pattern` (`{repo}`, `{slug}`,

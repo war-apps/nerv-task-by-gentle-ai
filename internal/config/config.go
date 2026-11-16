@@ -15,6 +15,13 @@ import (
 // Tool is the name nerv-task's files are resolved under.
 const Tool = "task"
 
+// DefaultTimerStore and DefaultStaleAfterHours are the global file's
+// built-in defaults (plugin/task/skills/task/SKILL.md §1).
+const (
+	DefaultTimerStore      = "~/.claude/work/timers.json"
+	DefaultStaleAfterHours = 12
+)
+
 // RepoConfig is the repository's own task.yaml.
 type RepoConfig struct {
 	Provider        string                    `yaml:"provider,omitempty"`

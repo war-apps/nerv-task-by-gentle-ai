@@ -61,7 +61,7 @@ func runConfigure(args []string, stdout, stderr io.Writer) int {
 	deps := configure.Deps{
 		GlobalPath: config.UserPath(home, goos()),
 		Providers:  discoverProviders(),
-		Git:        resolveGit(),
+		Git:        resolveGit(home),
 		Now:        time.Now,
 		Stdin:      os.Stdin,
 		Stdout:     stdout,
@@ -119,13 +119,13 @@ func discoverProviders() []*provider.Manifest {
 	return manifests
 }
 
-func resolveGit() configure.GitSettings {
+func resolveGit(home string) configure.GitSettings {
 	root, err := gitToplevel()
 	if err != nil {
-		return configure.DefaultGit()
+		root = ""
 	}
-	got, found, err := configure.ReadNervGit(root)
-	if err != nil || !found {
+	got, err := configure.ReadNervGit(home, goos(), root)
+	if err != nil {
 		return configure.DefaultGit()
 	}
 	return got

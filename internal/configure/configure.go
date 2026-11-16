@@ -6,98 +6,13 @@ package configure
 import (
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/war-apps/nerv-task-by-gentle-ai/internal/config"
 	"github.com/war-apps/nerv-task-by-gentle-ai/internal/provider"
 )
-
-// loadYAML reads path as YAML into v. A missing file is not an error:
-// found is false and v is left untouched.
-func loadYAML(path string, v any) (found bool, err error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return false, nil
-		}
-		return false, err
-	}
-	if err := yaml.Unmarshal(data, v); err != nil {
-		return false, err
-	}
-	return true, nil
-}
-
-// GitSettings are the worktree offer's settings (plugin/task/skills/task/SKILL.md
-// §1, §9). They have built-in defaults, overridden opportunistically by
-// nerv's own .ai-workflow/config.yaml git: block when present. This is
-// never a dependency: nerv-task works standalone with no nerv installed.
-type GitSettings struct {
-	BranchPattern    string `json:"branch_pattern" yaml:"branch_pattern"`
-	CommitRefPattern string `json:"commit_ref_pattern" yaml:"commit_ref_pattern"`
-	Worktree         bool   `json:"worktree" yaml:"worktree"`
-	WorktreePattern  string `json:"worktree_pattern" yaml:"worktree_pattern"`
-	BaseBranch       string `json:"base_branch" yaml:"base_branch"`
-}
-
-// DefaultGit is nerv-task's built-in git settings, used whenever no
-// nerv configuration overrides them.
-func DefaultGit() GitSettings {
-	return GitSettings{
-		BranchPattern:    "{type}/{prefix_lower}-{id}-{slug}",
-		CommitRefPattern: "({prefix}-{id})",
-		Worktree:         true,
-		WorktreePattern:  "../{repo}-worktrees/{branch}",
-		BaseBranch:       "develop",
-	}
-}
-
-// nervGitDoc is the slice of nerv's own .ai-workflow/config.yaml this
-// package reads opportunistically.
-type nervGitDoc struct {
-	Git struct {
-		BranchPattern    *string `yaml:"branch_pattern"`
-		CommitRefPattern *string `yaml:"commit_ref_pattern"`
-		Worktree         *bool   `yaml:"worktree"`
-		WorktreePattern  *string `yaml:"worktree_pattern"`
-		BaseBranch       *string `yaml:"base_branch"`
-	} `yaml:"git"`
-}
-
-// ReadNervGit opportunistically reads root/.ai-workflow/config.yaml's
-// git: block, when nerv is also set up in this repository. A missing
-// file, or one with no git: block, is not an error: found is false.
-func ReadNervGit(root string) (GitSettings, bool, error) {
-	got := DefaultGit()
-	path := filepath.Join(root, ".ai-workflow", "config.yaml")
-	var doc nervGitDoc
-	found, err := loadYAML(path, &doc)
-	if err != nil || !found {
-		return GitSettings{}, false, err
-	}
-	if doc.Git.BranchPattern != nil {
-		got.BranchPattern = *doc.Git.BranchPattern
-	}
-	if doc.Git.CommitRefPattern != nil {
-		got.CommitRefPattern = *doc.Git.CommitRefPattern
-	}
-	if doc.Git.Worktree != nil {
-		got.Worktree = *doc.Git.Worktree
-	}
-	if doc.Git.WorktreePattern != nil {
-		got.WorktreePattern = *doc.Git.WorktreePattern
-	}
-	if doc.Git.BaseBranch != nil {
-		got.BaseBranch = *doc.Git.BaseBranch
-	}
-	return got, true, nil
-}
 
 // Deps bundles what Print and Set need: the global task.yaml path, the
 // discovered provider manifests (for listing and --set validation), and
