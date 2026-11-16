@@ -1,5 +1,5 @@
-github.com/war-apps/nerv-kit-by-gentle-ai v0.1.1 h1:UpjqIsK5Qi9LzVYe7ofgVGC7fn5rSWHSzUkmQH5F3CE=
-github.com/war-apps/nerv-kit-by-gentle-ai v0.1.1/go.mod h1:Pu59EQ8xrVDMtYz898meuCu/wrtC4OVsqk5vO1IZaso=
+github.com/war-apps/nerv-kit-by-gentle-ai v0.1.2 h1:cURKmVb497CilvhoNofmXXTzUOkJvQytRZKRDF0U2pY=
+github.com/war-apps/nerv-kit-by-gentle-ai v0.1.2/go.mod h1:Pu59EQ8xrVDMtYz898meuCu/wrtC4OVsqk5vO1IZaso=
 golang.org/x/sys v0.50.0 h1:dkKZEFTEKaLr1sjhs0WiKqoi8Jj5nHbS3Njmx1UoMJs=
 golang.org/x/sys v0.50.0/go.mod h1:hNLxWAXmnKAxqDtdwIYC4bM9oQPEecfsnNMuSxOs3og=
 golang.org/x/term v0.48.0 h1:G6UU1eiSB8nl3DzeUGt7Mg+2SctI8tPS6Z5/mBt6cOk=

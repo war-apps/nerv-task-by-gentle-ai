@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   settings.json written, only after the new plugins installed
   successfully, so a failed install leaves task@nerv/task-teamwork@nerv
   enabled.
+- Bumped `nerv-kit-by-gentle-ai` to v0.1.2: the materialized
+  marketplace.json now lists the core plugin as `task` (its own
+  plugin.json name), not `nerv-task` (the marketplace name).
 
 ## [1.0.0] - 2026-11-16
 

@@ -82,6 +82,39 @@ func TestInstall_MaterializesAndRegistersCorePlugin(t *testing.T) {
 	}
 }
 
+// TestInstall_MaterializedMarketplaceListsCorePluginAsTask guards against
+// nerv-kit's own marketplace.json bug (fixed in v0.1.2): the core plugin
+// must be listed under its own plugin.json name ("task"), matching the
+// name half of CorePluginID ("task@nerv-task"), never the marketplace
+// name ("nerv-task") the directory marketplace itself is registered
+// under.
+func TestInstall_MaterializedMarketplaceListsCorePluginAsTask(t *testing.T) {
+	deps, _ := newDeps(t)
+
+	if _, err := install.Install(deps); err != nil {
+		t.Fatalf("Install() error = %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(deps.MarketplaceDir, ".claude-plugin", "marketplace.json"))
+	if err != nil {
+		t.Fatalf("reading marketplace.json: %v", err)
+	}
+	var manifest struct {
+		Plugins []struct {
+			Name string `json:"name"`
+		} `json:"plugins"`
+	}
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		t.Fatalf("parsing marketplace.json: %v", err)
+	}
+	if len(manifest.Plugins) == 0 {
+		t.Fatal("marketplace.json lists no plugins")
+	}
+	if manifest.Plugins[0].Name != "task" {
+		t.Errorf("marketplace.json core plugin name = %q, want %q", manifest.Plugins[0].Name, "task")
+	}
+}
+
 func TestInstall_WithTeamwork_EnablesTeamworkPlugin(t *testing.T) {
 	deps, settingsPath := newDeps(t)
 	deps.WithTeamwork = true
