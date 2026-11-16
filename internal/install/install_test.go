@@ -359,6 +359,64 @@ func writeInstalledPlugins(t *testing.T, home string, plugins map[string]string)
 	}
 }
 
+// TestInstall_AlreadyEnabledTeamworkPlugin_IsRefreshedWithoutFlag covers
+// the upgrade path: `nerv-task upgrade` re-runs `nerv-task install` with
+// no flags and no terminal, so a plugin that is already enabled under
+// nerv-task (task-teamwork@nerv-task, independently of the legacy
+// task-teamwork@nerv auto-enable) must still be refreshed, never left
+// behind at its old installed version just because --with-teamwork was
+// not passed again.
+func TestInstall_AlreadyEnabledTeamworkPlugin_IsRefreshedWithoutFlag(t *testing.T) {
+	deps, settingsPath := newDeps(t)
+	if err := os.MkdirAll(filepath.Dir(settingsPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	existing := `{"enabledPlugins":{"task@nerv-task":true,"task-teamwork@nerv-task":true}}`
+	if err := os.WriteFile(settingsPath, []byte(existing), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	writeInstalledPlugins(t, deps.Home, map[string]string{
+		"task@nerv-task":          deps.MarketplaceDir,
+		"task-teamwork@nerv-task": deps.MarketplaceDir,
+	})
+	fake := &runnertest.FakeRunner{}
+	deps.Runner = fake
+
+	if _, err := install.Install(deps); err != nil {
+		t.Fatalf("Install() error = %v", err)
+	}
+
+	assertUninstallThenInstall := func(id string) {
+		t.Helper()
+		uninstallIdx, installIdx := -1, -1
+		for i, c := range fake.Calls {
+			if c.Name != "claude" || len(c.Args) < 3 || c.Args[0] != "plugin" {
+				continue
+			}
+			if c.Args[1] == "uninstall" && c.Args[2] == id {
+				uninstallIdx = i
+			}
+			if c.Args[1] == "install" && c.Args[2] == id {
+				installIdx = i
+			}
+		}
+		if uninstallIdx == -1 {
+			t.Errorf("Install() never uninstalled %s before refreshing it", id)
+		}
+		if installIdx == -1 || installIdx < uninstallIdx {
+			t.Errorf("Install() must reinstall %s after uninstalling (uninstall at %d, install at %d)", id, uninstallIdx, installIdx)
+		}
+	}
+	assertUninstallThenInstall("task@nerv-task")
+	assertUninstallThenInstall("task-teamwork@nerv-task")
+
+	m := readSettings(t, settingsPath)
+	enabled := m["enabledPlugins"].(map[string]any)
+	if enabled["task-teamwork@nerv-task"] != true {
+		t.Errorf("enabledPlugins = %v, want task-teamwork@nerv-task to stay enabled", enabled)
+	}
+}
+
 func TestInstall_RefreshesPluginCache(t *testing.T) {
 	deps, _ := newDeps(t)
 	fake := &runnertest.FakeRunner{}
