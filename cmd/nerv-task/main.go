@@ -17,6 +17,7 @@ Usage:
   nerv-task configure [--print] [--json] [--set key=value]
   nerv-task init [--provider <name>] [--import] [--none]
   nerv-task upgrade [--alpha|--rc]
+  nerv-task version [--json]
 
 Run "nerv-task <command> -h" for a command's own flags.
 `
@@ -46,6 +47,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return runInit(rest, stdout, stderr)
 	case "upgrade":
 		return runUpgrade(rest, stdout, stderr)
+	case "version":
+		return runVersion(rest, stdout, stderr)
 	case "-h", "--help", "help":
 		fmt.Fprint(stdout, usage)
 		return 0
