@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-11-16
+
+### Fixed
+
+- `nerv-task install` now refreshes every nerv-task plugin that is
+  already enabled in settings.json (`<name>@nerv-task`), not just
+  task@nerv-task and task-teamwork@nerv-task when `--with-teamwork` is
+  passed. `nerv-task upgrade` re-runs install with no flags and no
+  terminal, so an already-enabled plugin like task-teamwork@nerv-task
+  was silently left at its old installed version after an upgrade; it
+  is now uninstalled and reinstalled like the core plugin. Never enables
+  a plugin the caller did not already have.
+
 ## [1.1.0] - 2026-11-16
 
 ### Added

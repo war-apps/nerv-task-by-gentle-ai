@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/war-apps/nerv-kit-by-gentle-ai/claudeplugin"
@@ -111,15 +112,25 @@ func Install(deps Deps) (Result, error) {
 	if withTeamwork {
 		ids = append(ids, TeamworkPluginID)
 	}
+	// Every nerv-task plugin the caller already had enabled is refreshed
+	// too, regardless of --with-teamwork or a terminal offering it: this
+	// is what keeps `nerv-task upgrade` (which re-runs install with no
+	// flags and no terminal) from silently leaving an enabled plugin
+	// behind at its old installed version. Never enables a plugin the
+	// caller did not already have.
+	for _, id := range settings.MarketplacePlugins(MarketplaceName) {
+		if settings.PluginEnabled(id) && !slices.Contains(ids, id) {
+			ids = append(ids, id)
+		}
+	}
 
 	if err := refreshCache(deps, ids); err != nil {
 		return result, err
 	}
 
 	settings.RegisterMarketplace(MarketplaceName, deps.MarketplaceDir)
-	settings.EnablePlugin(CorePluginID)
-	if withTeamwork {
-		settings.EnablePlugin(TeamworkPluginID)
+	for _, id := range ids {
+		settings.EnablePlugin(id)
 	}
 
 	for _, id := range LegacyPluginIDs {
