@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-16
+
 ### Added
 
 - `nerv-task version [--json]` prints the binary and task plugin versions, following the NERV ecosystem version contract (`nerv version`'s own format/fields) so `nerv` can report nerv-task as installed/outdated.

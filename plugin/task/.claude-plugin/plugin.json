@@ -1,6 +1,6 @@
 {
   "name": "task",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "nerv-task: /task:* commands, local timers, and the event dispatcher that hands pipeline events to the installed task providers",
   "author": { "name": "Walter Rodriguez" }
 }
