@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -20,9 +23,13 @@ import (
 	"github.com/war-apps/nerv-task-by-gentle-ai/internal/provider"
 )
 
-const configureUsage = `Usage: nerv-task configure [--print] [--json] [--set key=value]
+const configureUsage = `Usage: nerv-task configure [--print] [--json] [--set key=value] [--answers <file>]
 
-With no flags, prints the current global configuration (same as --print).
+With no mode flag: on a terminal, runs the interactive wizard (pick
+which providers to enable, then their personal settings, then
+timer_store and stale_after_hours, with a diff and a confirmation
+before writing); without a terminal, prints the current configuration
+and how to set a key (no prompts).
 
 --print            Print the global task.yaml: its config path, values,
                     defaults seed, known providers and git settings.
@@ -30,6 +37,9 @@ With no flags, prints the current global configuration (same as --print).
 --set key=value    Set one global key (timer_store, stale_after_hours,
                     rounding_minutes) or one provider's scope: user key
                     (<provider>.<key>). May be given more than once.
+--answers <file>   Drive the interactive wizard from a file instead of
+                    a real terminal, one answer per line. A missing
+                    file is treated as empty.
 `
 
 // stringList is a repeatable flag.Value, for --set.
@@ -42,10 +52,15 @@ func (s *stringList) Set(v string) error {
 }
 
 func runConfigure(args []string, stdout, stderr io.Writer) int {
+	return runConfigureWithOptions(args, stdout, stderr, defaultCLIOptions())
+}
+
+func runConfigureWithOptions(args []string, stdout, stderr io.Writer, opts cliOptions) int {
 	fs := flag.NewFlagSet("configure", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	printFlag := fs.Bool("print", false, "")
 	jsonFlag := fs.Bool("json", false, "")
+	answersFlag := fs.String("answers", "", "")
 	var sets stringList
 	fs.Var(&sets, "set", "")
 	if err := fs.Parse(args); err != nil {
@@ -58,14 +73,7 @@ func runConfigure(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "nerv-task configure: %v\n", err)
 		return 2
 	}
-	deps := configure.Deps{
-		GlobalPath: config.UserPath(home, goos()),
-		Providers:  discoverProviders(),
-		Git:        resolveGit(home),
-		Now:        time.Now,
-		Stdin:      os.Stdin,
-		Stdout:     stdout,
-	}
+	deps := buildConfigureDeps(home, stdout)
 
 	for _, kv := range sets {
 		result, err := configure.Set(deps, kv)
@@ -76,16 +84,68 @@ func runConfigure(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stdout, "%s: %s -> %s\n", result.Key, orDash(result.Old), result.New)
 	}
 
-	if len(sets) > 0 && !*printFlag && !*jsonFlag {
-		return 0
+	flagMode := len(sets) > 0 || *printFlag || *jsonFlag
+	if flagMode {
+		if len(sets) > 0 && !*printFlag && !*jsonFlag {
+			return 0
+		}
+		return printConfigure(deps, stdout, stderr, *jsonFlag)
 	}
 
+	// No mode flag: the interactive wizard, driven by --answers when
+	// given, otherwise the real terminal; without either, print the
+	// current configuration and how to set a key (no prompts).
+	switch {
+	case *answersFlag != "":
+		in, err := openAnswersFile(*answersFlag)
+		if err != nil {
+			fmt.Fprintf(stderr, "nerv-task configure: %v\n", err)
+			return 2
+		}
+		return runConfigureWizard(deps, in, stdout, stderr)
+	case opts.IsTerminal != nil && opts.IsTerminal():
+		return runConfigureWizard(deps, opts.Stdin, stdout, stderr)
+	default:
+		if code := printConfigure(deps, stdout, stderr, false); code != 0 {
+			return code
+		}
+		fmt.Fprintln(stdout, "\nstdin is not a terminal: set a key with --set key=value, or run on a terminal (or with --answers <file>) to configure interactively.")
+		return 0
+	}
+}
+
+// runConfigureWizard runs the interactive wizard against in, reporting
+// ErrInputClosed (a genuinely exhausted reader, such as an --answers
+// file that ran out) as a refusal that wrote nothing.
+func runConfigureWizard(deps configure.Deps, in io.Reader, stdout, stderr io.Writer) int {
+	if _, err := configure.RunWizard(deps, in, stdout); err != nil {
+		fmt.Fprintf(stderr, "nerv-task configure: %v\n", err)
+		return 1
+	}
+	return 0
+}
+
+// openAnswersFile reads path's whole content up front (small text
+// files, one answer per line). A missing file is treated as an empty
+// answers file -- never an error (mirrors nerv's own configure).
+func openAnswersFile(path string) (io.Reader, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return strings.NewReader(""), nil
+		}
+		return nil, err
+	}
+	return bytes.NewReader(data), nil
+}
+
+func printConfigure(deps configure.Deps, stdout, stderr io.Writer, asJSON bool) int {
 	out, err := configure.Print(deps)
 	if err != nil {
 		fmt.Fprintf(stderr, "nerv-task configure: %v\n", err)
 		return 1
 	}
-	if *jsonFlag {
+	if asJSON {
 		enc := json.NewEncoder(stdout)
 		enc.SetIndent("", "  ")
 		if err := enc.Encode(out); err != nil {
@@ -96,6 +156,16 @@ func runConfigure(args []string, stdout, stderr io.Writer) int {
 	}
 	printText(stdout, out)
 	return 0
+}
+
+func buildConfigureDeps(home string, stdout io.Writer) configure.Deps {
+	return configure.Deps{
+		GlobalPath: config.UserPath(home, goos()),
+		Providers:  discoverProviders(),
+		Git:        resolveGit(home),
+		Now:        time.Now,
+		Stdout:     stdout,
+	}
 }
 
 func orDash(s string) string {

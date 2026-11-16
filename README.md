@@ -62,8 +62,8 @@ Full contract: `plugin/task/skills/task/SKILL.md`.
 
 | Command | What it does |
 |---|---|
-| `nerv-task install [--with-teamwork] [--no-configure]` | Materialize and register the plugin marketplace |
-| `nerv-task configure [--print] [--json] [--set key=value]` | View or edit the global configuration |
+| `nerv-task install [--with-teamwork] [--no-configure]` | Materialize and register the plugin marketplace; on a terminal, offers to run `nerv-task configure` once installed |
+| `nerv-task configure [--print] [--json] [--set key=value] [--answers <file>]` | On a terminal with no flags, runs an interactive wizard: pick which providers to enable, their personal settings, and the timer defaults, with a diff and a confirmation before writing. Without a terminal, prints the current configuration and how to set a key. `--answers <file>` drives the wizard from a file (one answer per line) instead of a real terminal. |
 | `nerv-task init [--provider <name>] [--import] [--none]` | Write this repository's own `task.yaml` |
 | `nerv-task upgrade [--alpha\|--rc]` | Replace the binary with the newest release, then reinstall |
 
@@ -82,7 +82,8 @@ full key reference):
   that seeds a new repository's file.
 
 `nerv-task init` writes the repository file for you, seeded from your
-global `defaults:`. `nerv-task configure` edits the global file.
+global `defaults:`. `nerv-task configure` edits the global file,
+interactively on a terminal.
 
 ## Relation to nerv
 
