@@ -22,12 +22,15 @@ Source to port (read-only): nerv repo `develop` at 93982c0.
 
 | ID | Specs | Route | Status | Commit |
 |---|---|---|---|---|
-| W1 | T-S6 | delegated writer | pending | |
-| W2 | T-S1, T-S3, T-S4, T-S9 | delegated writer | pending | |
-| W3 | T-S2, T-S7 (install, configure) | delegated writer | pending | |
-| W4 | T-S2, T-S5, T-S7 (init) | delegated writer | pending | |
-| W5 | T-S7 (upgrade), T-S8, T-S10 | delegated writer | pending | |
+| W1 | T-S6 | delegated writer | done | 42ab15e |
+| W2 | T-S1, T-S3, T-S4, T-S9 | delegated writer | done | d538092 |
+| W3 | T-S2, T-S7 (install, configure) | delegated writer | done; interactive configure added after review | fff8035, 668f7bd |
+| W4 | T-S2, T-S5, T-S7 (init) | delegated writer | done; security fix: never import personal keys from a repository into the global config (amended); git defaults fixed after review | b143ea2, 0902a9e |
+| W5 | T-S7 (upgrade), T-S8, T-S10 | delegated writer | done | 6aaf5d4, c71a932 |
 
 ## Log
 
 - **L1** (2026-11-13) Design from the P2 research; user confirmed `install.ps1`. Defaults taken: `nerv-events.yaml`, opportunistic git settings, import offer on `init`.
+- **L2** (2026-11-13) Security review: `init --import` copied a repository's `scope: user` provider keys into the global task.yaml (cross-repository config poisoning); fixed with a RED test: personal keys from a repository are never written, only reported by name; imported repo keys are type-checked.
+- **L3** (2026-11-16) Parent review: the writer's git defaults were guesses (4 of 5 wrong, `worktree` a bool); fixed to nerv's catalogue values (`develop`, `ask`, `.claude/worktrees/{slug}`, `feature/{prefix}-{id}-{slug}`, `({PREFIX}-{id})`), reading nerv's user config then the repo's (0902a9e). Interactive `configure` (provider choice, user keys with defaults, diff and confirm; offered at the end of `install`; `--answers` for tests) via golang.org/x/term like nerv (668f7bd).
+- **L4** (2026-11-16) Verification: gofmt/vet/build clean, `go test -count=1 ./...` 8 packages ok on Windows, `go mod tidy` no-op. Sandbox run of the real binary with an isolated HOME holding `nerv@nerv`, `task@nerv`, `task-teamwork@nerv`, `release@nerv`: install disabled only the two task plugins, kept `nerv@nerv` and `release@nerv`, registered marketplace `nerv-task` and enabled `task@nerv-task`, `task-teamwork@nerv-task`; the real ~/.claude was untouched.
