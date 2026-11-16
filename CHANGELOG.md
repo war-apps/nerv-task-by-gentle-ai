@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-16
+
+First release: nerv's task extension as an independent tool of the NERV
+ecosystem. It installs with `scripts/install.sh` or `scripts/install.ps1` and
+works without nerv; on a machine with nerv's own `task@nerv` plugin,
+`nerv-task install` disables it so `/task:*` is not duplicated.
+
 ### Added
 
 - `nerv-task install`, `nerv-task configure`, `nerv-task init` and
