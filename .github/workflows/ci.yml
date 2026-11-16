@@ -84,10 +84,91 @@ jobs:
           stubdir="$RUNNER_TEMP/stub"
           mkdir -p "$fakehome" "$stubdir"
 
+          # A realistic stub: "install" fails unless the plugin name is
+          # actually listed in the marketplace it was registered under
+          # (resolved through settings.json's extraKnownMarketplaces, the
+          # same way the real claude CLI's own registration works), and
+          # "uninstall" fails for a plugin that is not currently recorded
+          # as installed. This is what exposed nerv-task's own
+          # first-install bug: a stub that accepted anything never did.
           cat >"$stubdir/claude" <<'EOF'
-          #!/usr/bin/env sh
-          echo "stub claude: $*"
-          exit 0
+          #!/usr/bin/env python3
+          import json
+          import os
+          import sys
+
+          def load_json(path, default):
+              if not os.path.exists(path):
+                  return default
+              with open(path) as f:
+                  return json.load(f)
+
+          def save_json(path, data):
+              os.makedirs(os.path.dirname(path), exist_ok=True)
+              with open(path, "w") as f:
+                  json.dump(data, f, indent=2)
+
+          def fail(message):
+              print(message, file=sys.stderr)
+              sys.exit(1)
+
+          args = sys.argv[1:]
+          home = os.environ.get("HOME", "")
+          settings_path = os.path.join(home, ".claude", "settings.json")
+          installed_path = os.path.join(home, ".claude", "plugins", "installed_plugins.json")
+
+          if len(args) < 2 or args[0] != "plugin":
+              fail(f"stub claude: unsupported invocation: {args}")
+
+          verb = args[1]
+
+          if verb == "marketplace" and len(args) >= 4 and args[2] == "add":
+              directory = args[3]
+              manifest_path = os.path.join(directory, ".claude-plugin", "marketplace.json")
+              with open(manifest_path) as f:
+                  manifest = json.load(f)
+              name = manifest["name"]
+              settings = load_json(settings_path, {})
+              settings.setdefault("extraKnownMarketplaces", {})[name] = {
+                  "source": {"source": "directory", "path": directory}
+              }
+              save_json(settings_path, settings)
+              print(f"stub claude: added marketplace {name} at {directory}")
+              sys.exit(0)
+
+          if verb == "install" and len(args) >= 3:
+              plugin_id = args[2]
+              name, _, marketplace = plugin_id.partition("@")
+              settings = load_json(settings_path, {})
+              entry = settings.get("extraKnownMarketplaces", {}).get(marketplace)
+              if entry is None:
+                  fail(f'Marketplace "{marketplace}" not found')
+              directory = entry["source"]["path"]
+              manifest_path = os.path.join(directory, ".claude-plugin", "marketplace.json")
+              manifest = load_json(manifest_path, {"plugins": []})
+              names = [p["name"] for p in manifest.get("plugins", [])]
+              if name not in names:
+                  fail(f'Plugin "{name}" not found in marketplace "{marketplace}"')
+              installed = load_json(installed_path, {"plugins": {}})
+              installed.setdefault("plugins", {})[plugin_id] = [
+                  {"installPath": directory, "version": "1.0.0"}
+              ]
+              save_json(installed_path, installed)
+              print(f"stub claude: installed {plugin_id}")
+              sys.exit(0)
+
+          if verb == "uninstall" and len(args) >= 3:
+              plugin_id = args[2]
+              installed = load_json(installed_path, {"plugins": {}})
+              plugins = installed.get("plugins", {})
+              if plugin_id not in plugins:
+                  fail(f'Plugin "{plugin_id}" not found in installed plugins')
+              del plugins[plugin_id]
+              save_json(installed_path, installed)
+              print(f"stub claude: uninstalled {plugin_id}")
+              sys.exit(0)
+
+          fail(f"stub claude: unsupported invocation: {args}")
           EOF
           chmod +x "$stubdir/claude"
 
