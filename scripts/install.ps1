@@ -101,11 +101,15 @@ function Test-Checksum {
     param([string]$ArchivePath, [string]$ChecksumsPath)
 
     $name = Split-Path -Leaf $ArchivePath
-    $line = Select-String -Path $ChecksumsPath -Pattern ([Regex]::Escape($name)) -SimpleMatch | Select-Object -First 1
+    # checksums.txt lines are "<sha256>  <file name>": compare the name field
+    # exactly, so a dotted version or a longer file name never mismatches.
+    $line = Get-Content -Path $ChecksumsPath |
+        Where-Object { ($_.Trim() -split '\s+')[1] -eq $name } |
+        Select-Object -First 1
     if (-not $line) {
         throw "no checksum entry for $name in checksums.txt"
     }
-    $expected = ($line.Line -split '\s+')[0]
+    $expected = ($line.Trim() -split '\s+')[0]
     $actual = (Get-FileHash -Path $ArchivePath -Algorithm SHA256).Hash
     if ($expected.ToLower() -ne $actual.ToLower()) {
         throw "checksum mismatch for $name`: expected $expected, got $actual"

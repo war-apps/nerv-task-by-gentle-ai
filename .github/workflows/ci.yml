@@ -54,6 +54,11 @@ jobs:
         shell: bash
         run: go test -count=1 ./...
 
+      - name: install.ps1 tests (Windows PowerShell 5.1)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tests/install-ps1.test.ps1
+
   install-without-nerv:
     name: Install on a runner with no nerv
     runs-on: ubuntu-latest
