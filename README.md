@@ -66,6 +66,7 @@ Full contract: `plugin/task/skills/task/SKILL.md`.
 | `nerv-task configure [--print] [--json] [--set key=value] [--answers <file>]` | On a terminal with no flags, runs an interactive wizard: pick which providers to enable, their personal settings, and the timer defaults, with a diff and a confirmation before writing. Without a terminal, prints the current configuration and how to set a key. `--answers <file>` drives the wizard from a file (one answer per line) instead of a real terminal. |
 | `nerv-task init [--provider <name>] [--import] [--none]` | Write this repository's own `task.yaml` |
 | `nerv-task upgrade [--alpha\|--rc]` | Replace the binary with the newest release, then reinstall |
+| `nerv-task version [--json]` | Print the binary and task plugin versions |
 
 ## Configuration
 
