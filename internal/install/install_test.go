@@ -1,6 +1,7 @@
 package install_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -142,6 +143,186 @@ func TestInstall_DisablesLegacyNervPlugins(t *testing.T) {
 	}
 	if len(result.DisabledLegacyPlugins) != 2 {
 		t.Errorf("DisabledLegacyPlugins = %v, want 2 entries", result.DisabledLegacyPlugins)
+	}
+}
+
+// TestInstall_FirstInstall_SkipsUninstallWhenPluginNotYetInstalled covers a
+// real install.ps1 run: on a first install, task@nerv-task is not in
+// installed_plugins.json yet, so "claude plugin uninstall task@nerv-task"
+// fails with "Plugin ... not found in installed plugins" -- wording that
+// does not contain "not installed" and that this package must not depend
+// on. Install must check installed_plugins.json itself and skip the
+// uninstall call entirely instead of treating that failure as fatal.
+func TestInstall_FirstInstall_SkipsUninstallWhenPluginNotYetInstalled(t *testing.T) {
+	deps, _ := newDeps(t)
+	fake := &runnertest.FakeRunner{
+		Responses: map[string]runnertest.Response{
+			"claude plugin uninstall task@nerv-task": {
+				Stderr:   `Plugin "task@nerv-task" not found in installed plugins`,
+				ExitCode: 1,
+			},
+		},
+	}
+	deps.Runner = fake
+
+	if _, err := install.Install(deps); err != nil {
+		t.Fatalf("Install() error = %v, want nil on a first install", err)
+	}
+
+	for _, c := range fake.Calls {
+		if c.Name == "claude" && len(c.Args) >= 2 && c.Args[0] == "plugin" && c.Args[1] == "uninstall" {
+			t.Errorf("Install() called claude plugin uninstall on a first install, want it skipped: %v", c.Args)
+		}
+	}
+}
+
+// TestInstall_WhenAlreadyInstalled_UninstallsBeforeReinstalling keeps the
+// refresh behaviour for a second install: when installed_plugins.json
+// already records the plugin, Install must still uninstall it before
+// reinstalling, so an upgraded bundle is actually picked up.
+func TestInstall_WhenAlreadyInstalled_UninstallsBeforeReinstalling(t *testing.T) {
+	deps, _ := newDeps(t)
+	writeInstalledPlugins(t, deps.Home, map[string]string{"task@nerv-task": deps.MarketplaceDir})
+	fake := &runnertest.FakeRunner{}
+	deps.Runner = fake
+
+	if _, err := install.Install(deps); err != nil {
+		t.Fatalf("Install() error = %v", err)
+	}
+
+	uninstallIdx, installIdx := -1, -1
+	for i, c := range fake.Calls {
+		if c.Name == "claude" && len(c.Args) >= 3 && c.Args[0] == "plugin" && c.Args[1] == "uninstall" && c.Args[2] == "task@nerv-task" {
+			uninstallIdx = i
+		}
+		if c.Name == "claude" && len(c.Args) >= 3 && c.Args[0] == "plugin" && c.Args[1] == "install" && c.Args[2] == "task@nerv-task" {
+			installIdx = i
+		}
+	}
+	if uninstallIdx == -1 {
+		t.Error("Install() never uninstalled the already-installed plugin before reinstalling it")
+	}
+	if installIdx == -1 || installIdx < uninstallIdx {
+		t.Errorf("Install() must reinstall after uninstalling (uninstall at %d, install at %d)", uninstallIdx, installIdx)
+	}
+}
+
+// TestInstall_UninstallFailsForOtherReason_PropagatesError makes sure the
+// installed_plugins.json check only tolerates the "not yet installed"
+// case: any other uninstall failure on a plugin that IS recorded as
+// installed must still fail Install.
+func TestInstall_UninstallFailsForOtherReason_PropagatesError(t *testing.T) {
+	deps, _ := newDeps(t)
+	writeInstalledPlugins(t, deps.Home, map[string]string{"task@nerv-task": deps.MarketplaceDir})
+	fake := &runnertest.FakeRunner{
+		Responses: map[string]runnertest.Response{
+			"claude plugin uninstall task@nerv-task": {Stderr: "network error talking to the plugin registry", ExitCode: 1},
+		},
+	}
+	deps.Runner = fake
+
+	if _, err := install.Install(deps); err == nil {
+		t.Fatal("Install() error = nil, want an error for an unrelated uninstall failure")
+	}
+}
+
+// TestInstall_LegacyTeamworkEnabled_AutoInstallsTeamworkPlugin covers the
+// silent loss of the Teamwork provider: when task-teamwork@nerv was
+// enabled before install, and --with-teamwork was not passed (no terminal
+// to offer it either), task-teamwork@nerv-task must be installed anyway
+// so /task:* keeps its Teamwork provider.
+func TestInstall_LegacyTeamworkEnabled_AutoInstallsTeamworkPlugin(t *testing.T) {
+	deps, settingsPath := newDeps(t)
+	if err := os.MkdirAll(filepath.Dir(settingsPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	existing := `{"enabledPlugins":{"task@nerv":true,"task-teamwork@nerv":true}}`
+	if err := os.WriteFile(settingsPath, []byte(existing), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var stdout bytes.Buffer
+	deps.Stdout = &stdout
+
+	result, err := install.Install(deps)
+	if err != nil {
+		t.Fatalf("Install() error = %v", err)
+	}
+
+	if !result.TeamworkAutoEnabled {
+		t.Error("Result.TeamworkAutoEnabled = false, want true")
+	}
+	m := readSettings(t, settingsPath)
+	enabled := m["enabledPlugins"].(map[string]any)
+	if enabled["task-teamwork@nerv-task"] != true {
+		t.Errorf("enabledPlugins = %v, want task-teamwork@nerv-task enabled automatically", enabled)
+	}
+	if !bytes.Contains(stdout.Bytes(), []byte("task-teamwork@nerv-task")) {
+		t.Errorf("stdout = %q, want it to say task-teamwork@nerv-task was installed automatically", stdout.String())
+	}
+}
+
+// TestInstall_OnInstallFailure_LeavesLegacyPluginsEnabled is the rollback
+// safety net: if installing the new plugins through the real CLI fails,
+// settings.json must stay exactly as it was, so the user is never left
+// without a working /task:* (the old nerv plugins stay enabled).
+func TestInstall_OnInstallFailure_LeavesLegacyPluginsEnabled(t *testing.T) {
+	deps, settingsPath := newDeps(t)
+	if err := os.MkdirAll(filepath.Dir(settingsPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	existing := `{"enabledPlugins":{"task@nerv":true,"release@nerv":true},"extraKnownMarketplaces":{"nerv":{"source":{"source":"directory","path":"/somewhere"}}}}`
+	if err := os.WriteFile(settingsPath, []byte(existing), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	fake := &runnertest.FakeRunner{
+		Responses: map[string]runnertest.Response{
+			"claude plugin install task@nerv-task": {Stderr: `Plugin "task" not found in marketplace "nerv-task"`, ExitCode: 1},
+		},
+	}
+	deps.Runner = fake
+
+	result, err := install.Install(deps)
+	if err == nil {
+		t.Fatal("Install() error = nil, want an error when the CLI install fails")
+	}
+	if len(result.DisabledLegacyPlugins) != 0 {
+		t.Errorf("DisabledLegacyPlugins = %v, want none on a failed install", result.DisabledLegacyPlugins)
+	}
+
+	after, err := os.ReadFile(settingsPath)
+	if err != nil {
+		t.Fatalf("reading settings: %v", err)
+	}
+	if string(after) != existing {
+		t.Errorf("settings.json changed on a failed install:\nbefore: %s\nafter:  %s", existing, after)
+	}
+}
+
+// writeInstalledPlugins writes a minimal installed_plugins.json under
+// home/.claude/plugins recording each given plugin id as installed at
+// installPath.
+func writeInstalledPlugins(t *testing.T, home string, plugins map[string]string) {
+	t.Helper()
+	type entry struct {
+		InstallPath string `json:"installPath"`
+		Version     string `json:"version"`
+	}
+	doc := struct {
+		Plugins map[string][]entry `json:"plugins"`
+	}{Plugins: map[string][]entry{}}
+	for id, path := range plugins {
+		doc.Plugins[id] = []entry{{InstallPath: path, Version: "1.0.0"}}
+	}
+	data, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(home, ".claude", "plugins")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "installed_plugins.json"), data, 0o644); err != nil {
+		t.Fatal(err)
 	}
 }
 
