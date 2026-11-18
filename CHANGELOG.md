@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-11-18
+
+### Fixed
+
+- `nerv-task init` now refuses a repository-committed `.ai-workflow`
+  directory, `task.yaml` (its own write target) or, with `--import`,
+  nerv's own `config.yaml` (its read source) when any of them is a
+  symlink, or when `.ai-workflow` resolves outside the repository or
+  onto the global configuration directory. A cloned repository could
+  otherwise redirect init's write into the user's global `task.yaml`
+  (bypassing the rule that repository values never reach the global
+  file) or into any other file a symlink points to.
+
 ## [1.1.1] - 2026-11-16
 
 ### Fixed

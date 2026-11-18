@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -82,6 +83,19 @@ func Init(deps Deps, opts Options) (Result, error) {
 		return Result{Skipped: true}, nil
 	}
 
+	path := config.RepoPath(deps.RepoRoot)
+	aiWorkflowDir := filepath.Dir(path)
+	globalConfigDir := ""
+	if deps.GlobalPath != "" {
+		globalConfigDir = filepath.Dir(deps.GlobalPath)
+	}
+	if err := checkDirNotSymlinkEscape(aiWorkflowDir, deps.RepoRoot, globalConfigDir); err != nil {
+		return Result{}, err
+	}
+	if err := checkFileNotSymlink(path); err != nil {
+		return Result{}, err
+	}
+
 	repo := config.RepoConfig{}
 
 	global, _, err := config.LoadGlobal(deps.GlobalPath)
@@ -95,7 +109,10 @@ func Init(deps Deps, opts Options) (Result, error) {
 	}
 
 	if opts.Import {
-		nervConfigPath := filepath.Join(deps.RepoRoot, ".ai-workflow", "config.yaml")
+		nervConfigPath := filepath.Join(aiWorkflowDir, "config.yaml")
+		if err := checkFileNotSymlink(nervConfigPath); err != nil {
+			return Result{}, err
+		}
 		tasksBlock, found, err := readNervTasksBlock(nervConfigPath)
 		if err != nil {
 			return Result{}, err
@@ -112,12 +129,80 @@ func Init(deps Deps, opts Options) (Result, error) {
 		repo.Provider = opts.Provider
 	}
 
-	path := config.RepoPath(deps.RepoRoot)
 	if _, _, err := config.SaveRepo(path, repo, deps.now()); err != nil {
 		return Result{}, err
 	}
 	result.Path = path
 	return result, nil
+}
+
+// symlinkRefusal builds a clear refusal message naming path.
+func symlinkRefusal(path, reason string) error {
+	return fmt.Errorf("refusing %s: %s", path, reason)
+}
+
+// checkDirNotSymlinkEscape Lstat's dir; refuses when it is itself a
+// symlink. When it exists as a real directory, it must resolve
+// (filepath.EvalSymlinks) to somewhere under repoRoot's own resolved
+// path, and never to the global configuration directory: a cloned
+// repository must never be able to redirect its own .ai-workflow
+// directory into the user's global configuration (or anywhere else)
+// through a symlink, which would otherwise let repository-derived,
+// untrusted content bypass the personal-key protection entirely. A
+// missing dir is not an error (a fresh init creates it).
+func checkDirNotSymlinkEscape(dir, repoRoot, globalConfigDir string) error {
+	info, err := os.Lstat(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return symlinkRefusal(dir, "a cloned repository must not redirect its .ai-workflow directory through a symlink")
+	}
+	if !info.IsDir() {
+		return symlinkRefusal(dir, "expected a directory")
+	}
+
+	resolvedDir, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return err
+	}
+	resolvedRoot, err := filepath.EvalSymlinks(repoRoot)
+	if err != nil {
+		return err
+	}
+	rel, err := filepath.Rel(resolvedRoot, resolvedDir)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return symlinkRefusal(dir, fmt.Sprintf("it resolves outside the repository (%s)", resolvedDir))
+	}
+	if globalConfigDir != "" {
+		if resolvedGlobal, err := filepath.EvalSymlinks(globalConfigDir); err == nil && resolvedDir == resolvedGlobal {
+			return symlinkRefusal(dir, "it resolves to the global configuration directory")
+		}
+	}
+	return nil
+}
+
+// checkFileNotSymlink Lstat's path; refuses when it already exists as
+// a symlink. A cloned repository must never be able to redirect a
+// config file init is about to read from or write to -- task.yaml
+// (the write target) or, with --import, nerv's own config.yaml (the
+// read source) -- to a file outside the repository. A missing file is
+// not an error.
+func checkFileNotSymlink(path string) error {
+	info, err := os.Lstat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return symlinkRefusal(path, "a cloned repository must not redirect this file through a symlink")
+	}
+	return nil
 }
 
 func cloneRepoConfig(src config.RepoConfig) config.RepoConfig {
