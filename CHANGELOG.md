@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.3] - 2026-11-24
+
+### Fixed
+
+- `nerv-task --help` lists `configure --answers <file>`, as
+  `nerv-task configure -h` does.
+
+### Documentation
+
+- The README covers the requirements, the installer options, where
+  `install` writes, uninstalling, the configuration paths per OS and the
+  global, repository and git keys, connecting the Teamwork provider and its
+  keys, project providers, timers, what the dispatcher does for each nerv
+  event, upgrading and building from source; technology badges added.
+
 ## [1.1.2] - 2026-11-18
 
 ### Fixed
