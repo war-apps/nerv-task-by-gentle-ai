@@ -14,7 +14,7 @@ const usage = `nerv-task - task tracking plugin for Claude Code
 
 Usage:
   nerv-task install [--with-teamwork] [--no-configure]
-  nerv-task configure [--print] [--json] [--set key=value]
+  nerv-task configure [--print] [--json] [--set key=value] [--answers <file>]
   nerv-task init [--provider <name>] [--import] [--none]
   nerv-task upgrade [--alpha|--rc]
   nerv-task version [--json]
