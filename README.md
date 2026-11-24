@@ -1,5 +1,22 @@
 # nerv-task
 
+<p align="center">
+  <a href="https://code.claude.com/docs"><img alt="Claude Code plugin" src="https://img.shields.io/badge/Claude_Code-plugin-d97757?style=for-the-badge&logo=anthropic&logoColor=white"></a>
+  <a href="https://go.dev/"><img alt="Go CLI" src="https://img.shields.io/badge/Go-CLI-00ADD8?style=for-the-badge&logo=go&logoColor=white"></a>
+  <a href="https://www.markdownguide.org/"><img alt="Markdown commands and agent" src="https://img.shields.io/badge/Markdown-commands_%26_agent-000000?style=for-the-badge&logo=markdown&logoColor=white"></a>
+  <a href="https://yaml.org/"><img alt="YAML config" src="https://img.shields.io/badge/YAML-task.yaml-CB171E?style=for-the-badge&logo=yaml&logoColor=white"></a>
+  <a href="https://www.teamwork.com/"><img alt="Teamwork provider" src="https://img.shields.io/badge/Teamwork-MCP_provider-6c5ce7?style=for-the-badge"></a>
+  <a href="https://github.com/war-apps/nerv-by-gentle-ai"><img alt="NERV ecosystem" src="https://img.shields.io/badge/NERV-ecosystem_tool-8a2be2?style=for-the-badge"></a>
+  <a href="https://github.com/war-apps/nerv-kit-by-gentle-ai"><img alt="nerv-kit" src="https://img.shields.io/badge/nerv--kit-shared_library-5a4fcf?style=for-the-badge"></a>
+  <a href="https://www.gnu.org/software/bash/"><img alt="Bash and PowerShell installers" src="https://img.shields.io/badge/install-sh_%7C_ps1-4EAA25?style=for-the-badge&logo=gnubash&logoColor=white"></a>
+  <a href="https://goreleaser.com/"><img alt="GoReleaser" src="https://img.shields.io/badge/GoReleaser-releases-0F9D9A?style=for-the-badge"></a>
+  <a href="https://git-scm.com/"><img alt="git" src="https://img.shields.io/badge/git-gitflow-F05032?style=for-the-badge&logo=git&logoColor=white"></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/Gentleman-Programming/gentle-ai"><img alt="Built with Gentle-AI" src="https://raw.githubusercontent.com/Gentleman-Programming/gentle-ai/main/docs/assets/brand/built-with-gentle-ai.png"></a>
+</p>
+
 Task tracking for [Claude Code](https://claude.com/claude-code): `/task:*`
 commands, local timers, and an event dispatcher that hands pipeline events
 to whichever task tracker provider you have installed (Teamwork today).
