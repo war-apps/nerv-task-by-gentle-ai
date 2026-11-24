@@ -83,3 +83,14 @@ func TestRunConfigure_PrintJSON_Succeeds(t *testing.T) {
 		t.Errorf("stdout = %q, want JSON with config_path", stdout.String())
 	}
 }
+
+// The top-level usage names each command with the same flags as the
+// command's own usage line.
+func TestUsage_MatchesEachCommandsOwnUsageLine(t *testing.T) {
+	for _, own := range []string{configureUsage} {
+		first := strings.TrimPrefix(strings.SplitN(own, "\n", 2)[0], "Usage: ")
+		if !strings.Contains(usage, "  "+first+"\n") {
+			t.Errorf("top-level usage lacks %q:\n%s", first, usage)
+		}
+	}
+}
